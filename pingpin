@@ -1,0 +1,125 @@
+#!/bin/bash
+#    ██████  ██ ███    ██  ██████  ██████  ██ ███    ██
+#    ██   ██ ██ ████   ██ ██       ██   ██ ██ ████   ██
+#    ██████  ██ ██ ██  ██ ██   ███ ██████  ██ ██ ██  ██
+#    ██      ██ ██  ██ ██ ██    ██ ██      ██ ██  ██ ██
+#    ██      ██ ██   ████  ██████  ██      ██ ██   ████
+#
+# PingPin is a network analysys tool that wall ping a network 192.168.4.0..255
+#
+# Author: mybyt3 2023
+# Version: 1.0.1
+
+hflag=0
+sflag=0
+eflag=0
+tflag=0
+verbose=0
+
+lan="192.168.4"
+rstart="2"
+rend="255"
+time=1
+count=1
+online="0"
+
+OUTPUT=""
+
+print_usage() {
+  printf "Usage: ..."
+}
+
+while getopts "h:s:e:t:v:" name
+do
+  case $name in
+    h) lan="$OPTARG";;
+    s) rstart="$OPTARG";;
+    e) rend="$OPTARG";;
+    t) time="$OPTARG";;
+    v) verbose=1;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
+
+sp2="⠁⠂⠄⠠⠐⠈"
+print_arp(){
+
+  arpdata=""
+  echo -e "----------------------- [  💻 ARP TABLE ] -------------------------"
+  echo ""
+  aprtable=$(eval arp -a | sort)
+  online=$(echo "$aprtable" | wc -l | sed 's/ //g')
+  while IFS= read -r line; do
+      host=$(echo "$line" | awk '{print $2}' | sed 's/[()]//g')
+      mac=$(echo "$line" | awk '{print $4}')
+      printf '\t💻 %s\t\t %s\n' "$host" "$mac" | expand -t 10
+      arpdata="$arpdata$()"
+  done <<< "$aprtable"
+  echo -e "\n"
+  echo -e "----------------------- [ ($online) CLIENTS ] -----------------------\n"
+}
+
+banner(){
+echo "
+
+"
+
+echo -e "\033[1;35m
+	██████  ██ ███    ██  ██████  \033[1;33m██████  ██ ███    ██\033[1;35m
+	██   ██ ██ ████   ██ ██       \033[1;33m██   ██ ██ ████   ██\033[1;35m
+	██████  ██ ██ ██  ██ ██   ███ \033[1;33m██████  ██ ██ ██  ██\033[1;35m
+	██      ██ ██  ██ ██ ██    ██ \033[1;33m██      ██ ██  ██ ██\033[1;35m
+	██      ██ ██   ████  ██████  \033[1;33m██      ██ ██   ████\033[1;35m
+
+"
+echo -e "\033[0m"
+echo "-----------------------------------------------------------------"
+echo ""
+echo "🔍 Searching for ipv4 friends on $lan.[$rstart..$rend]"
+echo ""
+}
+banner
+touch /tmp/pingman
+echo "" > /tmp/pingman # empty the log
+scanning=1
+sp="◢◤◥◣"
+for i in $(eval echo {$rstart..$rend})
+do
+	      #echo -e "\033[0;32m[+]\033[0m 🏓 ping $lan.$i -c $count -t $time"
+
+	      result=$(eval ping $lan.$i -c $count -t $time | grep "transmitted")
+        if [[ $result == *"1 packets received"* ]]; then
+          # echo $result
+          # say "Host is up $lan.$i, scanning for ports" -v Fred
+          nmapresult=$(eval nmap "$lan.$i" | grep open)
+          nmapresultcount=$(echo "$nmapresult" | wc -l | sed 's/ //g')
+          if [[ "$nmapresultcount" -gt 1 ]]; then
+            newline="\t\033[0;32m[+]\033[0m 🏓 ping $lan.$i"
+            OUTPUT="$OUTPUT\n$newline\n\t    ↳ port scan: "
+          fi
+          while IFS= read -r line; do
+            if [[ "$line" != "" ]]; then
+              icon=$(echo -e "\033[0;32m●\033[0m")
+              OUTPUT="$OUTPUT\n\t └ $icon Open Port: $line"
+              echo -e " ↳  \b${sp:i++%${#sp}:1} Open Port: $line"
+              port=$(echo "$line" | awk '{print $1}' | sed 's/[^0-9]//g')
+              say "$port is open" -v Fred
+            fi
+          done <<< "$nmapresult"
+          # if [[ "$nmapresultcount" -gt 1 ]]; then
+          #   OUTPUT="$OUTPUT\n"
+          # fi
+        else
+          newline="\t\033[0;31m[+]\033[0m 🏓 ping $lan.$i"
+          OUTPUT="$OUTPUT\n$newline"
+        fi
+  rm /tmp/pingman
+  echo -e $OUTPUT > /tmp/pingman
+  clear
+  banner
+  print_arp
+  cat /tmp/pingman
+  sleep 1
+done
+
